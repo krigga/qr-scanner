@@ -30,6 +30,8 @@
     <br>
     <video id="qr-video"></video>
     <br>
+    <canvas id="qr-highlight"></canvas>
+    <br>
     <label>
         <input id="show-scan-region" type="checkbox">
         Show scan region
@@ -66,6 +68,7 @@
     QrScanner.WORKER_PATH = '../qr-scanner-worker.min.js';
 
     const video = document.getElementById('qr-video');
+    const highlightCanvas = document.getElementById('qr-highlight');
     const camHasCamera = document.getElementById('cam-has-camera');
     const camHasFlash = document.getElementById('cam-has-flash');
     const flashToggle = document.getElementById('flash-toggle');
@@ -87,7 +90,7 @@
 
     QrScanner.hasCamera().then(hasCamera => camHasCamera.textContent = hasCamera);
 
-    const scanner = new QrScanner(video, result => setResult(camQrResult, result), error => {
+    const scanner = new QrScanner(video, result => setResult(camQrResult, result), highlightCanvas, error => {
         camQrResult.textContent = error;
         camQrResult.style.color = 'inherit';
     });

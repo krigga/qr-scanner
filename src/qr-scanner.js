@@ -13,12 +13,14 @@ export default class QrScanner {
     constructor(
         video,
         onDecode,
+        highlightedCanvas = null,
         canvasSizeOrOnDecodeError = this._onDecodeError,
         canvasSizeOrCalculateScanRegion = this._calculateScanRegion,
         preferredFacingMode = 'environment'
     ) {
         this.$video = video;
         this.$canvas = document.createElement('canvas');
+        this.$highlightedCanvas = highlightedCanvas;
         this._onDecode = onDecode;
         this._legacyCanvasSize = QrScanner.DEFAULT_CANVAS_SIZE;
         this._preferredFacingMode = preferredFacingMode;
@@ -183,7 +185,7 @@ export default class QrScanner {
     }
 
     /* async */
-    static scanImage(imageOrFileOrUrl, scanRegion=null, qrEngine=null, canvas=null, fixedCanvasSize=false,
+    static scanImage(imageOrFileOrUrl, scanRegion=null, highlightedCanvas=null, qrEngine=null, canvas=null, fixedCanvasSize=false,
                      alsoTryWithoutScanRegion=false) {
         const gotExternalWorker = qrEngine instanceof Worker;
 
@@ -193,7 +195,7 @@ export default class QrScanner {
         ]).then(([engine, image]) => {
             qrEngine = engine;
             let canvasContext;
-            [canvas, canvasContext] = this._drawToCanvas(image, scanRegion, canvas, fixedCanvasSize);
+            [canvas, canvasContext] = this._drawToCanvas(image, scanRegion, canvas, highlightedCanvas, fixedCanvasSize);
 
             if (qrEngine instanceof Worker) {
                 if (!gotExternalWorker) {
@@ -246,7 +248,8 @@ export default class QrScanner {
         });
 
         if (scanRegion && alsoTryWithoutScanRegion) {
-            promise = promise.catch(() => QrScanner.scanImage(imageOrFileOrUrl, null, qrEngine, canvas, fixedCanvasSize));
+            // highlightedCanvas is only used for drawing to it, and since no exceptions can be thrown before the _drawToCanvas call, we can set it to null here
+            promise = promise.catch(() => QrScanner.scanImage(imageOrFileOrUrl, null, null, qrEngine, canvas, fixedCanvasSize));
         }
 
         promise = promise.finally(() => {
@@ -326,7 +329,7 @@ export default class QrScanner {
                 return;
             }
             this._qrEnginePromise
-                .then((qrEngine) => QrScanner.scanImage(this.$video, this._scanRegion, qrEngine, this.$canvas))
+                .then((qrEngine) => QrScanner.scanImage(this.$video, this._scanRegion, this.$highlightedCanvas, qrEngine, this.$canvas))
                 .then(this._onDecode, (error) => {
                     if (!this._active) return;
                     const errorMessage = error.message || error;
@@ -399,7 +402,7 @@ export default class QrScanner {
                 : null; // unknown
     }
 
-    static _drawToCanvas(image, scanRegion=null, canvas=null, fixedCanvasSize=false) {
+    static _drawToCanvas(image, scanRegion=null, canvas=null, highlightedCanvas=null, fixedCanvasSize=false) {
         canvas = canvas || document.createElement('canvas');
         const scanRegionX = scanRegion && scanRegion.x? scanRegion.x : 0;
         const scanRegionY = scanRegion && scanRegion.y? scanRegion.y : 0;
@@ -416,6 +419,20 @@ export default class QrScanner {
             scanRegionX, scanRegionY, scanRegionWidth, scanRegionHeight,
             0, 0, canvas.width, canvas.height
         );
+        if (highlightedCanvas) {
+            const w = image.width || image.videoWidth;
+            const h = image.height || image.videoHeight;
+            highlightedCanvas.height = highlightedCanvas.width * (h / w);
+            const ctx = highlightedCanvas.getContext('2d', { alpha: false });
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(image, 0, 0, highlightedCanvas.width, highlightedCanvas.height);
+            const scaledX = highlightedCanvas.width * (scanRegionX / w);
+            const scaledY = highlightedCanvas.height * (scanRegionY / h);
+            const scaledW = highlightedCanvas.width * (scanRegionWidth / w);
+            const scaledH = highlightedCanvas.height * (scanRegionHeight / h);
+            ctx.strokeStyle = 'yellow';
+            ctx.strokeRect(scaledX, scaledY, scaledW, scaledH);
+        }
         return [canvas, context];
     }
 
